@@ -774,7 +774,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
       canAcceptLowConfPrefetch(i)
     } */
   }
-  l1_pf_req.ready := canAcceptPrefetch.reduce(_ || _)
+  l1_pf_req.ready := canAcceptPrefetch.reduce(_ || _) || (dcache.io.prefetch_req.ready && l1_pf_req.bits.confidence === 1.U)
 
   val toPrefetchValidVec = (0 until LduCnt + HyuCnt).map{ case i =>
     if(i==0) l1_pf_req.valid
@@ -784,6 +784,10 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
     u.io.prefetch_req.valid <> toPrefetchValidVec(i)
     u.io.prefetch_req.bits <> l1_pf_req.bits
   }}
+
+  // move high confidence prefetch to mainpipe
+  dcache.io.prefetch_req.valid <> (l1_pf_req.valid && l1_pf_req.bits.confidence === 1.U)
+  dcache.io.prefetch_req.bits <> l1_pf_req.bits
 
   /** l1 pf fuzzer interface */
   val DebugEnableL1PFFuzzer = false
@@ -798,6 +802,10 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
       load_unit.io.prefetch_req.valid <> fuzzer.io.req.valid
       load_unit.io.prefetch_req.bits <> fuzzer.io.req.bits
     })
+
+    // move high confidence prefetch to mainpipe
+    dcache.io.prefetch_req.valid <> fuzzer.io.req.valid
+    dcache.io.prefetch_req.bits <> fuzzer.io.req.bits
 
     fuzzer.io.req.ready := l1_pf_req.ready
   }
